@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>사이버 카지노 - 관리자 패널</title>
+    <style>
+        body { background: #0f0f0f; color: white; font-family: sans-serif; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { color: #ffd700; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .request-card {
+            background: #1a1a1a; border: 1px solid #333; border-radius: 15px;
+            padding: 20px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .info b { color: #00f3ff; }
+        .btn-approve {
+            background: #2ecc71; color: white; border: none; padding: 10px 20px;
+            border-radius: 8px; cursor: pointer; font-weight: bold;
+        }
+        .btn-approve:hover { background: #27ae60; }
+        .status-tag { color: #888; font-size: 0.8rem; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💎 충전 요청 관리자 모드</h1>
+        <div id="adminRequestList">
+            <p>요청 내역을 불러오는 중...</p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        // 게임 페이지와 동일한 설정 사용
+        const firebaseConfig = {
+            apiKey: "AIzaSyCqeC3wg3CFvBGqr_V3XKC1AJdGO_CVzRE",
+            authDomain: "login-ccf94.firebaseapp.com",
+            databaseURL: "https://login-ccf94-default-rtdb.firebaseio.com",
+            projectId: "login-ccf94",
+            storageBucket: "login-ccf94.firebasestorage.app",
+            messagingSenderId: "931373528371",
+            appId: "1:931373528371:web:ba968c9a66297db0c13a46"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 실시간 요청 목록 감시
+        db.ref('chargeRequests').orderByChild('status').equalTo('pending').on('value', (snap) => {
+            const listDiv = document.getElementById('adminRequestList');
+            listDiv.innerHTML = "";
+            const data = snap.val();
+
+            if (!data) {
+                listDiv.innerHTML = "<p style='color:#666;'>현재 대기 중인 요청이 없습니다.</p>";
+                return;
+            }
+
+            for (let key in data) {
+                const req = data[key];
+                const card = document.createElement('div');
+                card.className = 'request-card';
+                card.innerHTML = `
+                    <div class="info">
+                        <div><b>사용자:</b> ${req.userName} (${req.userEmail})</div>
+                        <div><b>요청 포인트:</b> ${req.requestAmount.toLocaleString()} P</div>
+                        <div style="color:#ffd700;"><b>입금 확인 금액:</b> ${req.paymentAmount.toLocaleString()} 원</div>
+                        <div class="status-tag">신청시간: ${new Date(req.timestamp).toLocaleString()}</div>
+                    </div>
+                    <button class="btn-approve" onclick="approveCharge('${key}', '${req.uid}', ${req.requestAmount})">입금 확인 및 승인</button>
+                `;
+                listDiv.appendChild(card);
+            }
+        });
+
+        // 승인 로직 (유저 데이터 직접 수정)
+        function approveCharge(requestId, userId, amount) {
+            if(!confirm("실제 입금이 확인되었습니까?\n승인 즉시 유저의 잔액이 업데이트됩니다.")) return;
+
+            // 1. 유저 잔액 합산 (트랜잭션)
+            const userBalanceRef = db.ref('users/' + userId + '/balance');
+            userBalanceRef.transaction((current) => {
+                return (current || 0) + amount;
+            }, (error, committed) => {
+                if (committed) {
+                    // 2. 요청 상태 변경 (완료 처리)
+                    db.ref('chargeRequests/' + requestId).update({
+                        status: 'approved',
+                        approvedAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    alert("승인이 완료되었습니다!");
+                } else {
+                    alert("승인 실패: " + error);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
